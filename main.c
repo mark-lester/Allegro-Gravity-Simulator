@@ -64,10 +64,10 @@ Uint8       *pixel;
 #define MAX_ARRAY_SIZE 10000
 // SHM S 0.000000001,  scale = S/log(NUM)
 #define NUM 200
-#define S 200
+#define S 40000
 double average_energy_per_object=S;
 double scale = 1;
-double array_size=200;
+double array_size=500;
 
 // energy = integral of half distance * number of objects
 // ball radius, x, y, and y velocity
@@ -99,7 +99,7 @@ double merge_it(struct particle *a, struct particle *b){
 		struct particle *t;
 		t=a;
 		a=b;
-		b=a;
+		b=t;
 	}
 	a->xv =(b->xv*b->m + a->xv*a->xv)/(a->m + b->m);
 	a->yv =(b->yv*b->m + a->yv*a->yv)/(a->m + b->m);
