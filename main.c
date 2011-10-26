@@ -31,9 +31,14 @@ double screen_diag=1;
 int world_type=0;
 int max_its=-1;
 int sun_flag = FALSE;
+double sun_size=500;
 int bounce=FALSE;
 int merge=FALSE;
+int rotational_velocity_flag=FALSE;
+int rotational_velocity_range=3;
+
 int initial_velocity_flag=FALSE;
+int centrifugal_force_flag=FALSE;
 double initial_velocity_range=100;
 double extra_factor=0;
 
@@ -93,6 +98,10 @@ struct particle
 #define FORCE_SHMGRAVITY 4
 #define FORCE_SUPER_GRAVITY 5
 #define FORCE_SUPER3_GRAVITY 6
+#define FORCE_SCALE_LOG_GRAVITY 7 // "under construction"
+#define LAST_TYPE 6
+
+
 
 double merge_it(struct particle *a, struct particle *b){
 	if (a->m < b->m){
@@ -109,6 +118,7 @@ double merge_it(struct particle *a, struct particle *b){
 	b->m=b->rd=0;
 	return a->m;
 }
+
 double bounce_it(struct particle *a, struct particle *b, double min_dis){
    double rel_vol = sqrt(
 		                  ((a->xv - b->xv)*(a->xv - b->xv)) +
@@ -223,6 +233,17 @@ double attract(struct particle *a, struct particle *b,int force_type){
 			// integral of x cubed is x to the 4 over 4
 			pot *= (dist*dist*dist*dist - combined_radii*combined_radii*combined_radii*combined_radii)/4;
 			break;
+
+
+		case FORCE_SCALE_LOG_GRAVITY:
+			force *= (log(dist/(screen_diag*4)))*dist; // log(dist)*dist + log(4/screen)*dist
+
+			// integral of x log(x) = 1/4 x*x * (2*log(x) -1)
+			pot *= (dist *dist * (2*log(dist) -1)/4 + log(1/(screen_diag*2)) * dist *dist / 2)-
+					(combined_radii *combined_radii * (2*log(combined_radii) -1)/4 + log(1/(screen_diag*2)) * combined_radii *combined_radii / 2);
+			break;
+
+
 	}
 
 	// scale the incremental velocity vector components, (diff in x and y comps divided by the distance, e.g. sin and cos)
@@ -276,19 +297,21 @@ int do_world(int force_type, int world_size)
 	int loop_counter=0;
 
 	int k_finish,p_finish;
-	for(i = 0; i < world_size; i++)
-	{
-		p[i].x = (rand() % (W/2)) + (W/4);
-		p[i].y = (rand() % (H/2)) + (H/4);
-		p[i].xv = p[i].dxv=  p[i].yv = p[i].dyv=0;
+    if(0 /*solar_system_flag*/){
+
+    } else {
+    	for(i = 0; i < world_size; i++) {
+		  p[i].x = (rand() % (W/2)) + (W/4);
+		  p[i].y = (rand() % (H/2)) + (H/4);
+		  p[i].xv = p[i].dxv=  p[i].yv = p[i].dyv=0;
 
 #define RAND_COLOUR (rand() % 200) + 55;
-		p[i].r = RAND_COLOUR;
-		p[i].g = RAND_COLOUR;
-		p[i].b = RAND_COLOUR;
-		p[i].rd = (rand() % 15) + 1;
+		  p[i].r = RAND_COLOUR;
+		  p[i].g = RAND_COLOUR;
+		  p[i].b = RAND_COLOUR;
+		  p[i].rd = (rand() % 15) + 1;
 		//p[i].rd = (int)(rand() / 15);
-		p[i].m = p[i].rd*p[i].rd*p[i].rd;//*p[i].rd*p[i].rd*p[i].rd;
+		  p[i].m = p[i].rd*p[i].rd*p[i].rd;//*p[i].rd*p[i].rd*p[i].rd;
 #ifndef NO_GRAPHICS
 		p[i].col=makecol(p[i].r, p[i].g, p[i].b);
 #endif
@@ -297,25 +320,38 @@ int do_world(int force_type, int world_size)
 	    	p[i].x=W/2;
 	    	p[i].y=H/2;
 	    	p[i].rd = 25;
-	    	p[i].m = 50000;
+	    	p[i].m = sun_size;
 	    	p[i].col=white;
 	    	p[i].xv=0;
 	    	p[i].yv=0;
-	    }
+	      }
+    	}
 
-		total_mass+= p[i].m;
+		// work out centre of mass (do it after the sun calc, so we can use the previous value for that, plonking a load of mass at the com wont change it!
+		if(i==0) {  // first one obviously IS the CoM
+			total_mass = p[0].m;
+			centre_of_mass_x=p[0].x;
+			centre_of_mass_y=p[0].y;
+		}
+		else {  // then just work out how far you need to shift in the direction of the new body
+				// based on what fraction of the total mass the new body is
+			total_mass += p[i].m;
+			centre_of_mass_x+=(p[i].m/total_mass)*(p[i].x-centre_of_mass_x);
+			centre_of_mass_y+=(p[i].m/total_mass)*(p[i].y-centre_of_mass_y);
+		}
 	}
 
 
 	scale = 1;
-	// do a dummy run to add up the potentsail energy at start
+	// do a dummy run to add up the potential energy at start
 
 	for(i = 0; i < world_size; i++) {
 			for(j = i +1 ; j < world_size; j++) {
 				  start_potential += attract(&p[i],&p[j],force_type);
 			}
 			p[i].xv = p[i].dxv=  p[i].yv = p[i].dyv=0; //zap these back to zero
-    }
+
+	}
 
 	// this should result in a constant average energy per particle for all models
 	scale =  average_energy_per_object*array_size/start_potential;
@@ -323,24 +359,90 @@ int do_world(int force_type, int world_size)
 
 	if (initial_velocity_flag){
 		initial_velocity_range=3; // start_potential / total_mass;
-		//initial_velocity_range /= (double)10;
-		// do a dummy run to add up the potential energy at start
-		for(i = 0; i < world_size-2; i+=2) { // dont do the last if it's a sun
-			int k,j;
-				if (p[i].m < p[i+1].m){
-					k=i;j=i+1;
-				} else {
-					k=i+1;j=i;
-				}
-			    p[k].xv = (rand() % (int)initial_velocity_range) * (rand() %2 ? 1 : -1) ;
-				p[k].yv = (rand() % (int)initial_velocity_range) * (rand() %2 ? 1 : -1);
-				p[j].xv = -p[k].xv * p[k].m / p[j].m; // make the next one balance up the momentum
-				p[j].yv = -p[i].yv * p[k].m / p[j].m;
+		double momentum_x = 0;
+		double momentum_y = 0;
+		for(i = 0; i < world_size-1; i++) { // dont do the last if it's a sun
+			    p[i].xv = (rand() % (int)initial_velocity_range) * (rand() %2 ? 1 : -1) ;
+				p[i].yv = (rand() % (int)initial_velocity_range) * (rand() %2 ? 1 : -1);
+				momentum_x += p[i].m * p[i].xv;
+				momentum_y += p[i].m * p[i].yv;
 				start_kinetic += (p[i].xv * p[i].xv) + (p[i].yv * p[i].yv) * p[i].m ;
-				start_kinetic += (p[i+1].xv * p[i+1].xv) + (p[i+1].yv * p[i+1].yv) * p[i+1].m ;
 		}
+		// i = last one, which might be a sun, so shift it to balance the momentum
+		p[i].xv += - momentum_x / p[i].m;
+		p[i].yv += - momentum_y / p[i].m;
+	    start_kinetic += (p[i].xv * p[i].xv) + (p[i].yv * p[i].yv) * p[i].m ;
 	}
 
+	if (rotational_velocity_flag){
+		double momentum_x = 0;
+		double momentum_y = 0;
+
+		for(i = 0; i < world_size-1; i++) {
+				p[i].xv += (p[i].y - centre_of_mass_y) * rotational_velocity_range / screen_diag;
+			    p[i].yv +=-(p[i].x - centre_of_mass_x) * rotational_velocity_range / screen_diag;
+				momentum_x += p[i].m * p[i].xv;
+				momentum_y += p[i].m * p[i].yv;
+			    start_kinetic += (p[i].xv * p[i].xv) + (p[i].yv * p[i].yv) * p[i].m ;
+		}
+		// i = last one, which might be a sun, so shift it to balance the momentum
+		p[i].xv += - momentum_x / p[i].m;
+		p[i].yv += - momentum_y / p[i].m;
+	    start_kinetic += (p[i].xv * p[i].xv) + (p[i].yv * p[i].yv) * p[i].m ;
+	}
+
+	if (centrifugal_force_flag){
+		double momentum_x = 0;
+		double momentum_y = 0;
+
+		for(i = 0; i < world_size-1; i++) {
+
+				double dist_com = sqrt((p[i].y - centre_of_mass_y) * (p[i].y - centre_of_mass_y) +
+						               (p[i].x - centre_of_mass_x) * (p[i].x - centre_of_mass_x));
+				double v;
+
+			switch (world_type){
+				case FORCE_CONSTANT:
+					v = sqrt(scale*p[world_size-1].m*dist_com);
+					break;
+
+				case FORCE_GRAVITY:
+					v = sqrt(scale*p[world_size-1].m/dist_com);
+					break;
+
+				case FORCE_MINIGRAVITY:
+					v = sqrt(scale*p[world_size-1].m);
+					break;
+
+				case FORCE_SHMGRAVITY:
+					v = dist_com*sqrt(scale*p[world_size-1].m);
+					break;
+
+				case FORCE_SUPER_GRAVITY:
+					v = dist_com*sqrt(scale*p[world_size-1].m*dist_com);
+					break;
+
+				case FORCE_LOG_GRAVITY:
+					v = sqrt(scale*p[world_size-1].m*dist_com*log(dist_com));
+					break;
+
+				case FORCE_SUPER3_GRAVITY:
+					v = dist_com*dist_com*sqrt(scale*p[world_size-1].m);
+					break;
+     			}
+
+
+			    p[i].xv += (p[i].y - centre_of_mass_y) * v / dist_com;
+			    p[i].yv +=-(p[i].x - centre_of_mass_x) * v / dist_com;
+				momentum_x += p[i].m * p[i].xv;
+				momentum_y += p[i].m * p[i].yv;
+			    start_kinetic += (p[i].xv * p[i].xv) + (p[i].yv * p[i].yv) * p[i].m ;
+		}
+		// i = last one, which might be a sun, so shift it to balance the momentum
+		p[i].xv += - momentum_x / p[i].m;
+		p[i].yv += - momentum_y / p[i].m;
+	    start_kinetic += (p[i].xv * p[i].xv) + (p[i].yv * p[i].yv) * p[i].m ;
+	}
 
 	switch (force_type){
 			case FORCE_CONSTANT:
@@ -370,13 +472,17 @@ int do_world(int force_type, int world_size)
 			case FORCE_SUPER3_GRAVITY:
 				pstring="super 3 = cube of the distance between objects";
 				break;
+
+			case FORCE_SCALE_LOG_GRAVITY:
+				pstring="log scale = x*log(x/screen_size*4)";
+				break;
 		}
 
 
 	highscore = 0;
 	pot_highscore= 0;
 #ifdef ALLEGRO_ON
-	while(!key[KEY_ESC] && !key[KEY_M] && !key[KEY_B] && !key[KEY_S] && !key[KEY_V] && !key[KEY_SPACE] && !key[KEY_RIGHT] && !key[KEY_LEFT] && !key[KEY_UP]  && !key[KEY_DOWN]  && !key[KEY_PGUP]  && !key[KEY_PGDN]) {
+	while(!key[KEY_ESC] && !key[KEY_C] && !key[KEY_R] && !key[KEY_M] && !key[KEY_B] && !key[KEY_S] && !key[KEY_V] && !key[KEY_SPACE] && !key[KEY_RIGHT] && !key[KEY_LEFT] && !key[KEY_UP]  && !key[KEY_DOWN]  && !key[KEY_PGUP]  && !key[KEY_PGDN]) {
 #endif
 #ifdef SDL_ON
 	SDL_Event keyevent;    //The SDL event that we will poll to get events.
@@ -393,7 +499,7 @@ int do_world(int force_type, int world_size)
 		loop_counter++;
 		if (max_its > 0){
 			if (loop_counter > max_its){
-				world_type=rand() %6;
+				world_type=rand() %LAST_TYPE;
 				return 1;
 			}
 		}
@@ -460,7 +566,7 @@ int do_world(int force_type, int world_size)
 
 #endif
 #ifdef ALLEGRO_ON
-		textprintf(buffer, font, 0, 0, 15, "%s: o %d :l %d :v %0.0f: sp %0.0f: sk %0.0f: c %0.0f: k %0.0f: p %0.0f", pstring,world_size,loop_counter, initial_velocity_range,start_potential, start_kinetic, total_energy, total_kinetic, total_potential);
+		textprintf(buffer, font, 0, 0, 15, "%s: o %d :l %d:r=%d,%d:v %0.0f: sp %0.0f: sk %0.0f: c %0.0f: k %0.0f: p %0.0f", pstring,world_size,loop_counter, rotational_velocity_flag,rotational_velocity_range, initial_velocity_range,start_potential, start_kinetic, total_energy, total_kinetic, total_potential);
 
 		// total_kinetic_stripe = (total_kinetic / start_potential) * 3/4s of the screen width, same for potential,
 
@@ -500,9 +606,26 @@ int do_world(int force_type, int world_size)
 	 if (key[KEY_B]){
 		   bounce = !bounce;
 	 }
+	 if (key[KEY_C]){
+		   centrifugal_force_flag = !centrifugal_force_flag;
+	 }
 	 if (key[KEY_M]){
 		   merge = !merge;
 	 }
+
+	 if (key[KEY_R]){
+		 int shift_flag=FALSE;
+		   if (key[KEY_RSHIFT]){
+			   rotational_velocity_range++;
+			   shift_flag=TRUE;
+		   }
+		   if (key[KEY_LSHIFT]){
+			   rotational_velocity_range--;
+			   shift_flag=TRUE;
+		   }
+		   if (!shift_flag){ rotational_velocity_flag = !rotational_velocity_flag;}
+	 }
+
 	 if (key[KEY_RIGHT]){
 	 		 world_type++;
 	 }
@@ -523,8 +646,18 @@ int do_world(int force_type, int world_size)
 		 array_size = scale_down(array_size);
 	 }
 	 if (key[KEY_S]){
-		 sun_flag = !sun_flag;
-     }
+		 int shift_flag=FALSE;
+		   if (key[KEY_RSHIFT]){
+			   sun_size *= 10;
+			   shift_flag=TRUE;
+		   }
+		   if (key[KEY_LSHIFT]){
+			   sun_size /= 10;
+			   shift_flag=TRUE;
+		   }
+		   if (!shift_flag){ sun_flag = !sun_flag;}
+	 }
+
 	 if (key[KEY_V]){
 		 initial_velocity_flag = !initial_velocity_flag;
      }
@@ -538,12 +671,21 @@ int do_world(int force_type, int world_size)
 int main(int argc, char *argv[]){
 	int c;
 
-	while ((c = getopt (argc, argv, "mbsn:g:e:i:v:")) != -1) {
+	while ((c = getopt (argc, argv, "crmbsn:g:e:i:v:")) != -1) {
 	         switch (c)
 	           {
-	           case 's':
-	        	 sun_flag=TRUE;
-	        	 break;
+     	        case 'c':
+   	        	centrifugal_force_flag=TRUE;
+	         	    break;
+
+
+	            case 'r':
+   	        	rotational_velocity_flag=TRUE;
+	         	    break;
+
+	            case 's':
+	         	    sun_flag=TRUE;
+	         	     break;
 
 	           case 'b':
 	        	 bounce=TRUE;
@@ -613,11 +755,11 @@ int main(int argc, char *argv[]){
 				array_size=2;
 			}
 
-			if (world_type > 6) {
+			if (world_type > LAST_TYPE) {
 					world_type=0;
 			}
 		    if (world_type < 0){
-		    	world_type=6;
+		    	world_type=LAST_TYPE;
 		    }
 			loop_count++;
 		} while (do_world(world_type,array_size));
