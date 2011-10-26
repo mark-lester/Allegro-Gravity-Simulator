@@ -29,13 +29,14 @@
 #define RADIUS_OF_CENTRE_OF_MASS 20
 double screen_diag=1;
 int world_type=0;
-int max_its=-1;
+int max_its=2000;
 int sun_flag = FALSE;
 double sun_size=50000;
 int bounce=FALSE;
 int merge=FALSE;
 int rotational_velocity_flag=FALSE;
 int rotational_velocity_range=3;
+
 
 int initial_velocity_flag=FALSE;
 int centrifugal_force_flag=FALSE;
@@ -104,7 +105,7 @@ struct particle
 // mass in earths, distance in millions of km
 #define NEPTUNE_DIST 4503
 #define NEPTUNE_MASS 17.147
-#define NEPTUNE_RADIUS 24.4
+#define NEPTUNE_RADIUS 3.8
 #define URANUS_DIST 2876
 #define URANUS_MASS 14.536
 #define URANUS_RADIUS 4
@@ -113,7 +114,7 @@ struct particle
 #define SATURN_RADIUS 9.44
 #define JUPITER_DIST 778
 #define JUPITER_MASS 317.8
-#define JUPITER_RADIUS
+#define JUPITER_RADIUS 11
 #define MARS_DIST 227
 #define MARS_MASS 0.107
 #define MARS_RADIUS 0.533
@@ -127,7 +128,7 @@ struct particle
 #define MERCURY_MASS 0.055
 #define MERCURY_RADIUS 0.3829
 #define SUN_DISTANCE 0
-#define SUN_MASS 333
+#define SUN_MASS 333000
 #define SUN_RADIUS 109
 
 #define NUMBER_OF_PLANETS 9
@@ -138,7 +139,7 @@ struct planet {
 	 double radius;
 };
 
-struct planet planets[]={
+struct planet planets[NUMBER_OF_PLANETS]={
 	{ NEPTUNE_DIST,
        NEPTUNE_MASS,
        NEPTUNE_RADIUS
@@ -178,7 +179,7 @@ struct planet planets[]={
  };
 
 
-int solar_system_flag=0;
+int solar_system_flag=FALSE;
 
 
 double merge_it(struct particle *a, struct particle *b){
@@ -270,7 +271,7 @@ double attract(struct particle *a, struct particle *b,int force_type){
 			force /=  dist*dist;
 
 			// integral of 1/(x*x) is -1/x
-			pot *= (dist - combined_radii)/(dist*combined_radii);
+			pot *= (dist - combined_radii) /(combined_radii*dist);
 			break;
 
 		case FORCE_MINIGRAVITY:
@@ -376,53 +377,42 @@ int do_world(int force_type, int world_size)
 	int loop_counter=0;
 
 	int k_finish,p_finish;
-    if(solar_system_flag){
-    	double pscale = W/(2*planets[0].dist);
-    	world_size=NUMBER_OF_PLANETS;
-    	centrifugal_force_flag=TRUE;
-    	sun_flag=TRUE;
-    	centre_of_mass_x = 0;
-    	centre_of_mass_y = 0;
-    	for(i = 0; i < world_size; i++){
+	struct planet *planet_subset=planets;
+
+	if (solar_system_flag){
+		average_energy_per_object=1;
+		if (world_size > NUMBER_OF_PLANETS){
+			world_size=array_size=NUMBER_OF_PLANETS;
+		}
+		planet_subset += (NUMBER_OF_PLANETS - world_size);
+		sun_flag=FALSE;
+	}
+
+	for(i = 0; i < world_size; i++) {
+  		  if (solar_system_flag){
   		    p[i].y = H/2;
-  		    p[i].x = W/2 + (planets[i].dist* pscale);
-  		    p[i].rd = log(planets[i].radius);
-  		    p[i].m = planets[i].mass;
-  	    	p[i].r = RAND_COLOUR;
-  		    p[i].g = RAND_COLOUR;
-  			p[i].b = RAND_COLOUR;
-#ifndef NO_GRAPHICS
-  				p[i].col=makecol(p[i].r, p[i].g, p[i].b);
-#endif
-  		  if(i==0) {  // first one obviously IS the CoM
-    			total_mass = p[0].m;
-  	    		centre_of_mass_x=p[0].x;
-  		    	centre_of_mass_y=p[0].y;
-  		    }
-  		    else {  // then just work out how far you need to shift in the direction of the new body
-  				// based on what fraction of the total mass the new body is
-  			    total_mass += p[i].m;
-  			    centre_of_mass_x+=(p[i].m/total_mass)*(p[i].x-centre_of_mass_x);
-  			    centre_of_mass_y+=(p[i].m/total_mass)*(p[i].y-centre_of_mass_y);
-  		   }
-// make the sun bright
-  		  p[i-1].col=white;
+  		    p[i].x = W/2 + (planet_subset[i].dist*W*3/planet_subset[0].dist)/8;
+  		    //if (i != world_size){ //DONT do for sun
+  		    	p[i].rd = log(planet_subset[i].radius);
+  		    	if (world_size-1 != i){
+  		    		p[i].rd = (p[i].rd +1)*3;
+  		    	} else {
+  		    		p[i].rd=4;
+  		    	}
+  		    //}
+  		    p[i].m = planet_subset[i].mass;
+  		  } else {
+		    p[i].x = (rand() % (W/2)) + (W/4);
+		    p[i].y = (rand() % (H/2)) + (H/4);
+		    p[i].rd = (rand() % 15) + 1;
+		    p[i].m = p[i].rd*p[i].rd*p[i].rd;//*p[i].rd*p[i].rd*p[i].rd;
 
-    	}
+  		  }
+			p[i].r = RAND_COLOUR;
+			p[i].g = RAND_COLOUR;
+			p[i].b = RAND_COLOUR;
 
-
-    } else {
-    	for(i = 0; i < world_size; i++) {
-		  p[i].x = (rand() % (W/2)) + (W/4);
-		  p[i].y = (rand() % (H/2)) + (H/4);
-		  p[i].xv = p[i].dxv=  p[i].yv = p[i].dyv=0;
-
-		  p[i].r = RAND_COLOUR;
-		  p[i].g = RAND_COLOUR;
-		  p[i].b = RAND_COLOUR;
-		  p[i].rd = (rand() % 15) + 1;
-		//p[i].rd = (int)(rand() / 15);
-		  p[i].m = p[i].rd*p[i].rd*p[i].rd;//*p[i].rd*p[i].rd*p[i].rd;
+  		  p[i].xv = p[i].dxv=  p[i].yv = p[i].dyv=0;
 #ifndef NO_GRAPHICS
 		p[i].col=makecol(p[i].r, p[i].g, p[i].b);
 #endif
@@ -432,10 +422,13 @@ int do_world(int force_type, int world_size)
 	    	p[i].y=H/2;
 	    	p[i].rd = 25;
 	    	p[i].m = sun_size;
-	    	p[i].col=white;
 	    	p[i].xv=0;
 	    	p[i].yv=0;
+	    	p[i].col=white;
 	       }
+	      if (solar_system_flag && (i == world_size -1)){
+		    	p[i].col=white;
+	      }
 
 
 		// work out centre of mass (do it after the sun calc, so we can use the previous value for that, plonking a load of mass at the com wont change it!
@@ -451,7 +444,8 @@ int do_world(int force_type, int world_size)
 			centre_of_mass_y+=(p[i].m/total_mass)*(p[i].y-centre_of_mass_y);
 		  }
     	}
-	}
+
+
 
 
 	scale = 1;
@@ -464,7 +458,8 @@ int do_world(int force_type, int world_size)
 			p[i].xv = p[i].dxv=  p[i].yv = p[i].dyv=0; //zap these back to zero
 
 	}
-
+    double safe_sp=start_potential;
+    double safe_8to5 = 222;//attract(&p[8],&p[5],force_type);
 	// this should result in a constant average energy per particle for all models
 	scale =  average_energy_per_object*array_size/start_potential;
 	start_potential=average_energy_per_object*array_size;
@@ -681,7 +676,11 @@ int do_world(int force_type, int world_size)
 
 #endif
 #ifdef ALLEGRO_ON
-		textprintf(buffer, font, 0, 0, 15, "%s: o %d :l %d:r=%d,%d:v %0.0f: sp %0.0f: sk %0.0f: c %0.0f: k %0.0f: p %0.0f", pstring,world_size,loop_counter, rotational_velocity_flag,rotational_velocity_range, initial_velocity_range,start_potential, start_kinetic, total_energy, total_kinetic, total_potential);
+		//textprintf(buffer, font, 0, 0, 15, "mass %0.0f", total_mass);
+		textprintf(buffer, font, 0, 0, 15, "%s: o %d :l %d:r=%d,%d:8to5 %0.0f: mass %0.0f: sp %0.0f: sk %0.0f: c %0.0f: k %0.0f: p %0.0f",
+				pstring,world_size,loop_counter, rotational_velocity_flag,rotational_velocity_range,
+				safe_8to5,
+				total_mass,safe_sp/*start_potential*/,start_kinetic, total_energy, total_kinetic, total_potential);
 
 		// total_kinetic_stripe = (total_kinetic / start_potential) * 3/4s of the screen width, same for potential,
 
