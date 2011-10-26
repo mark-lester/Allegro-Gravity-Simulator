@@ -31,7 +31,7 @@ double screen_diag=1;
 int world_type=0;
 int max_its=-1;
 int sun_flag = FALSE;
-double sun_size=500;
+double sun_size=50000;
 int bounce=FALSE;
 int merge=FALSE;
 int rotational_velocity_flag=FALSE;
@@ -101,6 +101,84 @@ struct particle
 #define FORCE_SCALE_LOG_GRAVITY 7 // "under construction"
 #define LAST_TYPE 6
 
+// mass in earths, distance in millions of km
+#define NEPTUNE_DIST 4503
+#define NEPTUNE_MASS 17.147
+#define NEPTUNE_RADIUS 24.4
+#define URANUS_DIST 2876
+#define URANUS_MASS 14.536
+#define URANUS_RADIUS 4
+#define SATURN_DIST 1433
+#define SATURN_MASS 95.152
+#define SATURN_RADIUS 9.44
+#define JUPITER_DIST 778
+#define JUPITER_MASS 317.8
+#define JUPITER_RADIUS
+#define MARS_DIST 227
+#define MARS_MASS 0.107
+#define MARS_RADIUS 0.533
+#define EARTH_DIST 149
+#define EARTH_MASS 1
+#define EARTH_RADIUS 1
+#define VENUS_DIST 108
+#define VENUS_MASS 0.815
+#define VENUS_RADIUS 0.95
+#define MERCURY_DIST 57
+#define MERCURY_MASS 0.055
+#define MERCURY_RADIUS 0.3829
+#define SUN_DISTANCE 0
+#define SUN_MASS 333
+#define SUN_RADIUS 109
+
+#define NUMBER_OF_PLANETS 9
+
+struct planet {
+	 double dist;
+	 double mass;
+	 double radius;
+};
+
+struct planet planets[]={
+	{ NEPTUNE_DIST,
+       NEPTUNE_MASS,
+       NEPTUNE_RADIUS
+	},
+
+ 	{ URANUS_DIST ,
+      URANUS_MASS,
+      URANUS_RADIUS  },
+
+	{ SATURN_DIST ,
+      SATURN_MASS ,
+      SATURN_RADIUS},
+
+	{ JUPITER_DIST ,
+      JUPITER_MASS ,
+      JUPITER_RADIUS},
+
+    { MARS_DIST ,
+      MARS_MASS ,
+      MARS_RADIUS},
+
+	{ EARTH_DIST  ,
+      EARTH_MASS ,
+      EARTH_RADIUS},
+
+    { VENUS_DIST ,
+      VENUS_MASS ,
+      VENUS_RADIUS},
+
+    { MERCURY_DIST   ,
+      MERCURY_MASS ,
+      MERCURY_RADIUS},
+
+     {SUN_DISTANCE ,
+      SUN_MASS,
+      SUN_RADIUS}
+ };
+
+
+int solar_system_flag=0;
 
 
 double merge_it(struct particle *a, struct particle *b){
@@ -276,6 +354,7 @@ double scale_down(double val){
 }
 
 
+#define RAND_COLOUR (rand() % 200) + 55;
 
 int do_world(int force_type, int world_size)
 {
@@ -297,7 +376,40 @@ int do_world(int force_type, int world_size)
 	int loop_counter=0;
 
 	int k_finish,p_finish;
-    if(0 /*solar_system_flag*/){
+    if(solar_system_flag){
+    	double pscale = W/(2*planets[0].dist);
+    	world_size=NUMBER_OF_PLANETS;
+    	centrifugal_force_flag=TRUE;
+    	sun_flag=TRUE;
+    	centre_of_mass_x = 0;
+    	centre_of_mass_y = 0;
+    	for(i = 0; i < world_size; i++){
+  		    p[i].y = H/2;
+  		    p[i].x = W/2 + (planets[i].dist* pscale);
+  		    p[i].rd = log(planets[i].radius);
+  		    p[i].m = planets[i].mass;
+  	    	p[i].r = RAND_COLOUR;
+  		    p[i].g = RAND_COLOUR;
+  			p[i].b = RAND_COLOUR;
+#ifndef NO_GRAPHICS
+  				p[i].col=makecol(p[i].r, p[i].g, p[i].b);
+#endif
+  		  if(i==0) {  // first one obviously IS the CoM
+    			total_mass = p[0].m;
+  	    		centre_of_mass_x=p[0].x;
+  		    	centre_of_mass_y=p[0].y;
+  		    }
+  		    else {  // then just work out how far you need to shift in the direction of the new body
+  				// based on what fraction of the total mass the new body is
+  			    total_mass += p[i].m;
+  			    centre_of_mass_x+=(p[i].m/total_mass)*(p[i].x-centre_of_mass_x);
+  			    centre_of_mass_y+=(p[i].m/total_mass)*(p[i].y-centre_of_mass_y);
+  		   }
+// make the sun bright
+  		  p[i-1].col=white;
+
+    	}
+
 
     } else {
     	for(i = 0; i < world_size; i++) {
@@ -305,7 +417,6 @@ int do_world(int force_type, int world_size)
 		  p[i].y = (rand() % (H/2)) + (H/4);
 		  p[i].xv = p[i].dxv=  p[i].yv = p[i].dyv=0;
 
-#define RAND_COLOUR (rand() % 200) + 55;
 		  p[i].r = RAND_COLOUR;
 		  p[i].g = RAND_COLOUR;
 		  p[i].b = RAND_COLOUR;
@@ -315,8 +426,8 @@ int do_world(int force_type, int world_size)
 #ifndef NO_GRAPHICS
 		p[i].col=makecol(p[i].r, p[i].g, p[i].b);
 #endif
-		p[i].particle_type = rand() % 2;
-	    if (sun_flag && (i == world_size -1) ){ // make it the last one so it renders on top
+		  p[i].particle_type = rand() % 2;
+	      if (sun_flag && (i == world_size -1) ){ // make it the last one so it renders on top
 	    	p[i].x=W/2;
 	    	p[i].y=H/2;
 	    	p[i].rd = 25;
@@ -324,21 +435,22 @@ int do_world(int force_type, int world_size)
 	    	p[i].col=white;
 	    	p[i].xv=0;
 	    	p[i].yv=0;
-	      }
-    	}
+	       }
+
 
 		// work out centre of mass (do it after the sun calc, so we can use the previous value for that, plonking a load of mass at the com wont change it!
-		if(i==0) {  // first one obviously IS the CoM
+		  if(i==0) {  // first one obviously IS the CoM
 			total_mass = p[0].m;
 			centre_of_mass_x=p[0].x;
 			centre_of_mass_y=p[0].y;
-		}
-		else {  // then just work out how far you need to shift in the direction of the new body
+		  }
+		  else {  // then just work out how far you need to shift in the direction of the new body
 				// based on what fraction of the total mass the new body is
 			total_mass += p[i].m;
 			centre_of_mass_x+=(p[i].m/total_mass)*(p[i].x-centre_of_mass_x);
 			centre_of_mass_y+=(p[i].m/total_mass)*(p[i].y-centre_of_mass_y);
-		}
+		  }
+    	}
 	}
 
 
@@ -361,6 +473,7 @@ int do_world(int force_type, int world_size)
 		initial_velocity_range=3; // start_potential / total_mass;
 		double momentum_x = 0;
 		double momentum_y = 0;
+		start_kinetic = 0;
 		for(i = 0; i < world_size-1; i++) { // dont do the last if it's a sun
 			    p[i].xv = (rand() % (int)initial_velocity_range) * (rand() %2 ? 1 : -1) ;
 				p[i].yv = (rand() % (int)initial_velocity_range) * (rand() %2 ? 1 : -1);
@@ -377,6 +490,7 @@ int do_world(int force_type, int world_size)
 	if (rotational_velocity_flag){
 		double momentum_x = 0;
 		double momentum_y = 0;
+		start_kinetic = 0;
 
 		for(i = 0; i < world_size-1; i++) {
 				p[i].xv += (p[i].y - centre_of_mass_y) * rotational_velocity_range / screen_diag;
@@ -394,6 +508,7 @@ int do_world(int force_type, int world_size)
 	if (centrifugal_force_flag){
 		double momentum_x = 0;
 		double momentum_y = 0;
+		start_kinetic = 0;
 
 		for(i = 0; i < world_size-1; i++) {
 
@@ -482,7 +597,7 @@ int do_world(int force_type, int world_size)
 	highscore = 0;
 	pot_highscore= 0;
 #ifdef ALLEGRO_ON
-	while(!key[KEY_ESC] && !key[KEY_C] && !key[KEY_R] && !key[KEY_M] && !key[KEY_B] && !key[KEY_S] && !key[KEY_V] && !key[KEY_SPACE] && !key[KEY_RIGHT] && !key[KEY_LEFT] && !key[KEY_UP]  && !key[KEY_DOWN]  && !key[KEY_PGUP]  && !key[KEY_PGDN]) {
+	while(!key[KEY_ESC] && !key[KEY_C] && !key[KEY_P] && !key[KEY_R] && !key[KEY_M] && !key[KEY_B] && !key[KEY_S] && !key[KEY_V] && !key[KEY_SPACE] && !key[KEY_RIGHT] && !key[KEY_LEFT] && !key[KEY_UP]  && !key[KEY_DOWN]  && !key[KEY_PGUP]  && !key[KEY_PGDN]) {
 #endif
 #ifdef SDL_ON
 	SDL_Event keyevent;    //The SDL event that we will poll to get events.
@@ -606,6 +721,9 @@ int do_world(int force_type, int world_size)
 	 if (key[KEY_B]){
 		   bounce = !bounce;
 	 }
+	 if (key[KEY_P]){
+		   solar_system_flag = !solar_system_flag;
+	 }
 	 if (key[KEY_C]){
 		   centrifugal_force_flag = !centrifugal_force_flag;
 	 }
@@ -671,17 +789,20 @@ int do_world(int force_type, int world_size)
 int main(int argc, char *argv[]){
 	int c;
 
-	while ((c = getopt (argc, argv, "crmbsn:g:e:i:v:")) != -1) {
+	while ((c = getopt (argc, argv, "pcrmbsn:g:e:i:v:")) != -1) {
 	         switch (c)
 	           {
-     	        case 'c':
-   	        	centrifugal_force_flag=TRUE;
+     	        case 'p':
+                    solar_system_flag=TRUE;
 	         	    break;
 
+ 	            case 'c':
+                   centrifugal_force_flag=TRUE;
+         	       break;
 
 	            case 'r':
-   	        	rotational_velocity_flag=TRUE;
-	         	    break;
+   	        	   rotational_velocity_flag=TRUE;
+	         	   break;
 
 	            case 's':
 	         	    sun_flag=TRUE;
