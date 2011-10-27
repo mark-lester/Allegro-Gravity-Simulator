@@ -1,0 +1,19 @@
+comand line options
+-e <energy> 
+-n <Number of objects> \
+-g <type of gravity> 0=constant, 1=normal(inverse square), 2=inverse, 3=log  4="SHM", 5=super gravity 6=super 3 
+-s add sun
+-r add rotational velocity
+-v add rtaional velocity
+-p use solar system planets
+-i number of iterations before radnomly selecting another gravity type 
+
+runtine keystroke commands
+up/down arrow -> increase/decrease energy per object by 10%
+left/right arrow -> switch gravity type up or down
+PgUp/PgDn -> increase/decrease number of objects by 10% (or 1 if < 10)
+s -> turn on sun
+s+shift up/down -> increase/decrease sun mass
+r -> add rotatonal velocity
+r+shift up/down -> increase/decrease rotational velocity
+space -> start current 
