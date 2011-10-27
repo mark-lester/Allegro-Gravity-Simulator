@@ -4,7 +4,7 @@ comand line options
 -g <type of gravity> 0=constant, 1=normal(inverse square), 2=inverse, 3=log  4="SHM", 5=super gravity 6=super 3 
 -s add sun
 -r add rotational velocity
--v add rtaional velocity
+-v add random velocity
 -p use solar system planets
 -i number of iterations before radnomly selecting another gravity type 
 
@@ -16,4 +16,5 @@ s -> turn on sun
 s+shift up/down -> increase/decrease sun mass
 r -> add rotatonal velocity
 r+shift up/down -> increase/decrease rotational velocity
-space -> start current 
+space -> re-start current 
+p - switch to real solar system planets
